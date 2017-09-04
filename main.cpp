@@ -91,6 +91,8 @@ void MarkPartialRectangleOccupied(vector<vector<int>> &currentGrid, coord2D _cur
         for (int j = _currentRectInit.x; j <= _currentRectEnd.x; j++)
         {
             currentGrid[i][j] = 1;
+            //Print2DVector(currentGrid);
+            //std::cout << "MARKED " << i << ", " << j << endl;
         }
     }
 }
@@ -114,11 +116,33 @@ bool IsValidSolution(const vector<vector<int>> &initialGrid, const coord2D &_cur
 {
     return (!CurrentRectIsOpen(_currentRect) && IsGridComplete(initialGrid));
 }
+
+int CalculateRectangleArea(const coord2D &_rectInit, const coord2D &_rectEnd)
+{
+    return ((_rectEnd.x - _rectInit.x + 1) * (_rectEnd.y - _rectInit.y + 1));
+}
+
+int CalculateNumBlanks(const vector<vector<int>> &initialGrid)
+{
+    int numBlanks = 0;
+    for (int i = 0; i < initialGrid[0].size(); i++)
+    {
+        for (int j = 0; j < initialGrid.size(); j++)
+        {
+            if (!CellIsOccupied(initialGrid, coord2D(i, j)))
+            {
+                numBlanks++;
+            }
+        }
+    }
+    return numBlanks;
+}
 ////////////////////////////////////////////////////////////////////////////////
 // ALGORITHM
 ////////////////////////////////////////////////////////////////////////////////
-int CalculateRectanglesRecursive(vector<vector<int>> &initialGrid, vector<rectangle> &solution,
-        coord2D _currentPos, coord2D &_currentRect, int &_currentNumRect, vector<rectangle> _currentSolution, int level)
+int CalculateRectanglesRecursive(vector<vector<int>> &initialGrid, vector<rectangle> &bestSolution, int &bestCost,
+        coord2D _currentPos, coord2D _currentRect, vector<rectangle> _currentSolution, int _currentCost,
+        int level, int &numBlanks)
 {
     ////////////////////////////////////////////////////////////////////////////////
     // We are trying to solve the problem with a backtracking algorithm
@@ -130,11 +154,10 @@ int CalculateRectanglesRecursive(vector<vector<int>> &initialGrid, vector<rectan
     //  - Move right
     //  - Move down
 
-    //We will evaluate all the possibilities, and will take the best of all.
+    // We will evaluate all the possibilities, and will take the best of all.
     //  (with min. number of rectangles)
     ////////////////////////////////////////////////////////////////////////////////
 
-    // PRINT THE CURRENT POSITION IN RECURSION
     //for (int i = 0; i < level; i++)
     //{
     //    std::cout << "    :";
@@ -164,31 +187,20 @@ int CalculateRectanglesRecursive(vector<vector<int>> &initialGrid, vector<rectan
     }
 
     // IS SOLUTION?
-    //Evaluate if we have reached the end (_currentPos == lower-Right position of the grid)
-    if (_currentPos.y == initialGrid.size() - 1 &&
-        _currentPos.x == initialGrid[0].size() - 1)
+    //Evaluate if we have reached the end (numBlanks == 0)
+    if(numBlanks == 0)
     {
-        //Close the current rect if it was opened
-        if (CurrentRectIsOpen(_currentRect) &&
-            !CellIsOccupied(initialGrid, _currentPos))
-        {
-            _currentSolution.push_back(rectangle(_currentRect, _currentPos));
-
-            _currentNumRect++;
-            _currentRect = coord2D(-1, -1);
-        }
-
         // IS VALID SOLUTION?
         // We have a solution only if the _currentRect has been closed and all the grid is occupied
         if(IsValidSolution(initialGrid, _currentRect))
         {
-            std::cout << "TERMINADO RECURSION: " << _currentNumRect << " rectangles." << endl;
+            std::cout << "TERMINADO RECURSION: " << _currentCost << " rectangles." << endl;
             //for each (rectangle rect in _currentSolution)
             //{
             //    PrintRectangle(rect, initialGrid.size(), initialGrid[0].size());
             //    std::cout << endl;
             //}
-            return _currentNumRect;
+            return _currentCost;
         }
         else
         {
@@ -200,10 +212,10 @@ int CalculateRectanglesRecursive(vector<vector<int>> &initialGrid, vector<rectan
         // Take one of the recursive possibilities:
 
         // OPTIONS 1 & 2 - MOVE
-        CalculateRectanglesRecursive(initialGrid, solution, coord2D(_currentPos.x + 1, _currentPos.y), _currentRect, _currentNumRect, _currentSolution, level + 1);
-        CalculateRectanglesRecursive(initialGrid, solution, coord2D(_currentPos.x, _currentPos.y + 1), _currentRect, _currentNumRect, _currentSolution, level + 1);
+        CalculateRectanglesRecursive(initialGrid, bestSolution, bestCost, coord2D(_currentPos.x + 1, _currentPos.y), _currentRect, _currentSolution, _currentCost, level + 1, numBlanks);
+        CalculateRectanglesRecursive(initialGrid, bestSolution, bestCost, coord2D(_currentPos.x, _currentPos.y + 1), _currentRect,  _currentSolution, _currentCost, level + 1, numBlanks);
 
-        // OPTIONS 1 & 2 - CLOSE THE CURRENT RECTANGLE (IF CORRECT) AND MOVE
+        // OPTIONS 3 & 4 - CLOSE THE CURRENT RECTANGLE (IF CORRECT) AND MOVE
         if (CurrentRectIsOpen(_currentRect) &&
             !CellIsOccupied(initialGrid, _currentPos))
         {
@@ -211,15 +223,17 @@ int CalculateRectanglesRecursive(vector<vector<int>> &initialGrid, vector<rectan
             if (PartialRectangleIsCorrect(initialGrid, _currentRect, _currentPos))
             {
                 _currentSolution.push_back(rectangle(_currentRect, _currentPos));
-                solution.push_back(rectangle(_currentRect, _currentPos));
+                bestSolution.push_back(rectangle(_currentRect, _currentPos));
 
                 MarkPartialRectangleOccupied(initialGrid, _currentRect, _currentPos);
 
-                _currentNumRect++;
+                _currentCost++;
+                bestCost++;
+                numBlanks -= CalculateRectangleArea(_currentRect, _currentPos);
                 _currentRect = coord2D(-1, -1);
 
-                CalculateRectanglesRecursive(initialGrid, solution, coord2D(_currentPos.x + 1, _currentPos.y), _currentRect, _currentNumRect, _currentSolution, level + 1);
-                CalculateRectanglesRecursive(initialGrid, solution, coord2D(_currentPos.x, _currentPos.y + 1), _currentRect, _currentNumRect, _currentSolution, level + 1);
+                CalculateRectanglesRecursive(initialGrid, bestSolution, bestCost, coord2D(_currentPos.x + 1, _currentPos.y), _currentRect, _currentSolution, _currentCost, level + 1, numBlanks);
+                CalculateRectanglesRecursive(initialGrid, bestSolution, bestCost, coord2D(_currentPos.x, _currentPos.y + 1), _currentRect, _currentSolution, _currentCost, level + 1, numBlanks);
             }
             else
             {
@@ -227,16 +241,18 @@ int CalculateRectanglesRecursive(vector<vector<int>> &initialGrid, vector<rectan
             }
         }
 
-        return _currentNumRect;
+        return _currentCost;
     }
 }
 
 int CalculateRectangles(const vector<vector<int>> &initialGrid, vector<rectangle> &solution)
 {
     vector<vector<int>> copyGrid = initialGrid;
+    int numBlanks = CalculateNumBlanks(initialGrid);
     int numRects = 0;
-    CalculateRectanglesRecursive(copyGrid, solution,
-        coord2D(0,0), coord2D(-1,-1), numRects, vector<rectangle>(), 0);
+    CalculateRectanglesRecursive(copyGrid, solution, numRects,
+        coord2D(0,0), coord2D(-1,-1), vector<rectangle>(), 0,
+        0, numBlanks);
     return numRects;
 }
 
@@ -246,11 +262,24 @@ int CalculateRectangles(const vector<vector<int>> &initialGrid, vector<rectangle
 int main()
 {
     vector<vector<int>> initialGrid {
-        { 1,0,0,0,0,1 },
-        { 0,0,0,0,0,1 },
-        { 0,0,0,0,0,1 },
-        { 0,0,0,1,1,1 },
-        { 0,0,0,1,1,1 }
+        //{ 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },
+        //{ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },
+        //{ 0,1,1,0,0,0,1,1,0,0,0,1,1,0,0,0 },
+        //{ 0,1,0,0,0,0,1,1,0,1,0,1,0,0,1,0 },
+        //{ 1,0,1,0,0,0,1,1,0,1,0,0,1,0,1,0 },
+        //{ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },
+        //{ 0,1,0,0,0,0,1,0,0,1,0,1,0,0,1,0 },
+        //{ 1,0,1,0,0,0,0,1,0,1,0,0,1,0,1,0 },
+        //{ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }
+
+        //{ 1,0,0,0,0,0 },
+        //{ 0,0,1,1,1,0 },
+        //{ 0,1,1,0,1,0 },
+        //{ 0,1,1,1,1,0 },
+        //{ 1,0,1,0,0,0 },
+
+        { 0,0 },
+        { 0,1 }
     };
 
     std::cout << "INITIAL GRID:" << endl;
