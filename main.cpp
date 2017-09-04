@@ -118,7 +118,7 @@ bool IsValidSolution(const vector<vector<int>> &initialGrid, const coord2D &_cur
 // ALGORITHM
 ////////////////////////////////////////////////////////////////////////////////
 int CalculateRectanglesRecursive(vector<vector<int>> &initialGrid, vector<rectangle> &solution,
-        coord2D _currentPos, coord2D _currentRect, int &_currentNumRect, vector<rectangle> _currentSolution)
+        coord2D _currentPos, coord2D &_currentRect, int &_currentNumRect, vector<rectangle> _currentSolution, int level)
 {
     ////////////////////////////////////////////////////////////////////////////////
     // We are trying to solve the problem with a backtracking algorithm
@@ -133,6 +133,13 @@ int CalculateRectanglesRecursive(vector<vector<int>> &initialGrid, vector<rectan
     //We will evaluate all the possibilities, and will take the best of all.
     //  (with min. number of rectangles)
     ////////////////////////////////////////////////////////////////////////////////
+
+    // PRINT THE CURRENT POSITION IN RECURSION
+    //for (int i = 0; i < level; i++)
+    //{
+    //    std::cout << "    :";
+    //}
+    //std::cout << _currentPos.x << ", " << _currentPos.y << endl;
 
     // IS VALID?
     // If the current cell is out of bounds, this partial solution doesn't work
@@ -175,12 +182,12 @@ int CalculateRectanglesRecursive(vector<vector<int>> &initialGrid, vector<rectan
         // We have a solution only if the _currentRect has been closed and all the grid is occupied
         if(IsValidSolution(initialGrid, _currentRect))
         {
-            std::cout << "RESULT: " << _currentNumRect << " rectangles." << endl;
-            for each (rectangle rect in _currentSolution)
-            {
-                PrintRectangle(rect, initialGrid.size(), initialGrid[0].size());
-                std::cout << endl;
-            }
+            std::cout << "TERMINADO RECURSION: " << _currentNumRect << " rectangles." << endl;
+            //for each (rectangle rect in _currentSolution)
+            //{
+            //    PrintRectangle(rect, initialGrid.size(), initialGrid[0].size());
+            //    std::cout << endl;
+            //}
             return _currentNumRect;
         }
         else
@@ -193,8 +200,8 @@ int CalculateRectanglesRecursive(vector<vector<int>> &initialGrid, vector<rectan
         // Take one of the recursive possibilities:
 
         // OPTIONS 1 & 2 - MOVE
-        CalculateRectanglesRecursive(initialGrid, solution, coord2D(_currentPos.x + 1, _currentPos.y), _currentRect, _currentNumRect, _currentSolution);
-        CalculateRectanglesRecursive(initialGrid, solution, coord2D(_currentPos.x, _currentPos.y + 1), _currentRect, _currentNumRect, _currentSolution);
+        CalculateRectanglesRecursive(initialGrid, solution, coord2D(_currentPos.x + 1, _currentPos.y), _currentRect, _currentNumRect, _currentSolution, level + 1);
+        CalculateRectanglesRecursive(initialGrid, solution, coord2D(_currentPos.x, _currentPos.y + 1), _currentRect, _currentNumRect, _currentSolution, level + 1);
 
         // OPTIONS 1 & 2 - CLOSE THE CURRENT RECTANGLE (IF CORRECT) AND MOVE
         if (CurrentRectIsOpen(_currentRect) &&
@@ -204,15 +211,15 @@ int CalculateRectanglesRecursive(vector<vector<int>> &initialGrid, vector<rectan
             if (PartialRectangleIsCorrect(initialGrid, _currentRect, _currentPos))
             {
                 _currentSolution.push_back(rectangle(_currentRect, _currentPos));
-                solution.push_back(rectangle(rectangle(_currentRect, _currentPos)));
+                solution.push_back(rectangle(_currentRect, _currentPos));
 
                 MarkPartialRectangleOccupied(initialGrid, _currentRect, _currentPos);
 
                 _currentNumRect++;
                 _currentRect = coord2D(-1, -1);
 
-                CalculateRectanglesRecursive(initialGrid, solution, coord2D(_currentPos.x + 1, _currentPos.y), _currentRect, _currentNumRect, _currentSolution);
-                CalculateRectanglesRecursive(initialGrid, solution, coord2D(_currentPos.x, _currentPos.y + 1), _currentRect, _currentNumRect, _currentSolution);
+                CalculateRectanglesRecursive(initialGrid, solution, coord2D(_currentPos.x + 1, _currentPos.y), _currentRect, _currentNumRect, _currentSolution, level + 1);
+                CalculateRectanglesRecursive(initialGrid, solution, coord2D(_currentPos.x, _currentPos.y + 1), _currentRect, _currentNumRect, _currentSolution, level + 1);
             }
             else
             {
@@ -229,7 +236,7 @@ int CalculateRectangles(const vector<vector<int>> &initialGrid, vector<rectangle
     vector<vector<int>> copyGrid = initialGrid;
     int numRects = 0;
     CalculateRectanglesRecursive(copyGrid, solution,
-        coord2D(0,0), coord2D(-1,-1), numRects, vector<rectangle>());
+        coord2D(0,0), coord2D(-1,-1), numRects, vector<rectangle>(), 0);
     return numRects;
 }
 
