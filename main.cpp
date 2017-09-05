@@ -70,6 +70,11 @@ bool CellIsOccupied(const vector<vector<int>> &initialGrid, const coord2D &_pos)
 
 bool PartialRectangleIsCorrect(const vector<vector<int>> &initialGrid, coord2D _currentRectInit, coord2D _currentRectEnd)
 {
+    if (!CurrentRectIsOpen(_currentRectInit)) // if closed, suppose it correct
+    {
+        return true;
+    }
+
     for (int i = _currentRectInit.x; i <= _currentRectEnd.x; i++)
     {
         for (int j = _currentRectInit.y; j <= _currentRectEnd.y; j++)
@@ -83,14 +88,14 @@ bool PartialRectangleIsCorrect(const vector<vector<int>> &initialGrid, coord2D _
     return true;
 }
 
-void MarkPartialRectangleOccupied(vector<vector<int>> &currentGrid, coord2D _currentRectInit, coord2D _currentRectEnd)
+void MarkPartialRectangleOccupied(vector<vector<int>> &currentGrid, coord2D _currentRectInit, coord2D _currentRectEnd, int value)
 {
     //mark the currentRect as occupied
     for (int i = _currentRectInit.y; i <= _currentRectEnd.y; i++)
     {
         for (int j = _currentRectInit.x; j <= _currentRectEnd.x; j++)
         {
-            currentGrid[i][j] = 1;
+            currentGrid[i][j] = value;
             //Print2DVector(currentGrid);
             //std::cout << "MARKED " << i << ", " << j << endl;
         }
@@ -117,6 +122,25 @@ bool IsValidSolution(const vector<vector<int>> &initialGrid, const coord2D &_cur
     return (!CurrentRectIsOpen(_currentRect) && IsGridComplete(initialGrid));
 }
 
+bool IsValid(const vector<vector<int>> &occupiedGrid, const coord2D &_pos, const coord2D &_rect)
+{
+    // If the current cell is out of bounds, this partial solution doesn't work
+    if (_pos.y >= occupiedGrid.size() ||
+        _pos.x >= occupiedGrid[0].size())
+    {
+        return false;
+    }
+
+    // If the currentRect is opened and the current cell is occupied, this partial solution doesn't work
+    if (CurrentRectIsOpen(_rect) &&
+        CellIsOccupied(occupiedGrid, _pos))
+    {
+        return false;
+    }
+
+    return true;
+}
+
 int CalculateRectangleArea(const coord2D &_rectInit, const coord2D &_rectEnd)
 {
     return ((_rectEnd.x - _rectInit.x + 1) * (_rectEnd.y - _rectInit.y + 1));
@@ -137,20 +161,91 @@ int CalculateNumBlanks(const vector<vector<int>> &initialGrid)
     }
     return numBlanks;
 }
+
+// Returns false in case of NON VALID OPTION for the current state
+bool takeOption(int option, const vector<vector<int>> &marksGrid, const coord2D &_lastPos, const coord2D &_lastRect, coord2D &_nextPos, coord2D &_nextRect,
+    int &numBlanksClosed)
+{
+    // IF POS IS OUT OF BOUNDS THERE IS NOT ANY VALID OPTION
+    if (_lastPos.y >= marksGrid.size() ||
+        _lastPos.x >= marksGrid[0].size())
+    {
+        return false;
+    }
+
+    // IF THE CURRENT PARTIAL RECTANGLE IS NOT VALID THERE IS NOT ANY VALID OPTION
+    // TODO: would be better doing this check in each MOVE, only with the line expanded.
+    if (!PartialRectangleIsCorrect(marksGrid, _lastRect, _lastPos))
+    {
+        return false;
+    }
+
+    // POSSIBLE OPTIONS (4):
+    // (Each one, only when possible)
+    //  - OPEN CURRENT RECT
+    //  - CLOSE CURRENT RECT
+    //  - MOVE RIGHT
+    //  - MOVE DOWN
+    switch (option)
+    {
+    case 0: // OPEN CURRENT RECT
+        if (CurrentRectIsOpen(_lastRect)) // is open -> option invalid
+            return false;
+
+        if (CellIsOccupied(marksGrid, _lastPos)) // lastPos is occupied yet -> option invalid
+            return false;
+
+        _nextRect = _lastPos;
+        _nextPos = _lastPos;
+    break;
+
+    case 1: // CLOSE CURRENT RECT
+        if (!CurrentRectIsOpen(_lastRect)) // is closed -> option invalid
+            return false;
+
+        if (CellIsOccupied(marksGrid, _lastPos)) // lastPos is occupied yet -> option invalid
+            return false;
+
+        numBlanksClosed = CalculateRectangleArea(_lastRect, _lastPos);
+        _nextRect = coord2D(-1, -1);
+        _nextPos = _lastPos;
+    break;
+
+    case 2: // MOVE RIGHT
+        if (CurrentRectIsOpen(_lastRect) &&
+            CellIsOccupied(marksGrid, _lastPos)) // is open and occupied -> option invalid
+            return false;
+
+        _nextRect = _lastRect;
+        _nextPos = coord2D(_lastPos.x + 1, _lastPos.y);
+    break;
+
+    case 3: // MOVE DOWN
+        if (CurrentRectIsOpen(_lastRect) &&
+            CellIsOccupied(marksGrid, _lastPos)) // is open and occupied -> option invalid
+            return false;
+
+        _nextRect = _lastRect;
+        _nextPos = coord2D(_lastPos.x, _lastPos.y + 1);
+     break;
+    }
+
+    return true;
+}
 ////////////////////////////////////////////////////////////////////////////////
 // ALGORITHM
 ////////////////////////////////////////////////////////////////////////////////
-int CalculateRectanglesRecursive(vector<vector<int>> &initialGrid, vector<rectangle> &bestSolution, int &bestCost,
-        coord2D _currentPos, coord2D _currentRect, vector<rectangle> _currentSolution, int _currentCost,
-        int level, int &numBlanks)
+void CalculateRectanglesRecursive(vector<vector<int>> &marksGrid, vector<rectangle> &bestSolution, int &bestCost,
+    coord2D _currentPos, coord2D _currentRect, vector<rectangle> &_currentSolution, int &_currentCost,
+    int level, int &numBlanks)
 {
     ////////////////////////////////////////////////////////////////////////////////
     // We are trying to solve the problem with a backtracking algorithm
 
     // We will go through the whole triangle, and in each cell we will "decide" what recursion take;
     // In principle, we have 4 possibilities:
-    //  - Close the current rectangle, and move right
-    //  - Close the current rectangle, and move down
+    //  - Open a new rectangle
+    //  - Close the current rectangle
     //  - Move right
     //  - Move down
 
@@ -158,100 +253,76 @@ int CalculateRectanglesRecursive(vector<vector<int>> &initialGrid, vector<rectan
     //  (with min. number of rectangles)
     ////////////////////////////////////////////////////////////////////////////////
 
-    //for (int i = 0; i < level; i++)
-    //{
-    //    std::cout << "    :";
-    //}
-    //std::cout << _currentPos.x << ", " << _currentPos.y << endl;
+    int _opt = 0;
+    for (int opt = 0; opt < 4; opt++) //it could be: while((opt<4)&&!success)
+    {
+        // takeOption will take EACH of the options for our current state.
+        // Could be some redundant, that will be removed later
 
-    // IS VALID?
-    // If the current cell is out of bounds, this partial solution doesn't work
-    if (_currentPos.y >= initialGrid.size() ||
-        _currentPos.x >= initialGrid[0].size())
-    {
-        return 0;
-    }
-    // If the current cell is occupied, and the currentRect is opened, this partial solution doesn't work
-    if (CurrentRectIsOpen(_currentRect) &&
-        CellIsOccupied(initialGrid, _currentPos))
-    {
-        return 0;
-    }
+        // Temporary values, to use the same values for each opt
+        coord2D _newPos;
+        coord2D _newRect;
+        int numBlanksClosed = 0;
 
-    // PREPARE LEVEL ITERATION
-    // "Open" a new rectangle if possible when then current is closed (rectangle(-1,-1))
-    if (!CurrentRectIsOpen(_currentRect) &&
-        !CellIsOccupied(initialGrid, _currentPos))
-    {
-        _currentRect = _currentPos;
-    }
+        bool validOption = takeOption(opt, marksGrid, _currentPos, _currentRect, _newPos, _newRect, numBlanksClosed);
 
-    // IS SOLUTION?
-    //Evaluate if we have reached the end (numBlanks == 0)
-    if(numBlanks == 0)
-    {
-        // IS VALID SOLUTION?
-        // We have a solution only if the _currentRect has been closed and all the grid is occupied
-        if(IsValidSolution(initialGrid, _currentRect))
+        // validOption -> this option "makes sense"
+        // Will be evaluated as final solution, or will call recursive function
+        if (validOption)
         {
-            std::cout << "TERMINADO RECURSION: " << _currentCost << " rectangles." << endl;
-            //for each (rectangle rect in _currentSolution)
-            //{
-            //    PrintRectangle(rect, initialGrid.size(), initialGrid[0].size());
-            //    std::cout << endl;
-            //}
-            return _currentCost;
-        }
-        else
-        {
-            return 0;
-        }
-    }
-    else // BACKTRACKING (k+1)
-    {
-        // Take one of the recursive possibilities:
-
-        // OPTIONS 1 & 2 - MOVE
-        CalculateRectanglesRecursive(initialGrid, bestSolution, bestCost, coord2D(_currentPos.x + 1, _currentPos.y), _currentRect, _currentSolution, _currentCost, level + 1, numBlanks);
-        CalculateRectanglesRecursive(initialGrid, bestSolution, bestCost, coord2D(_currentPos.x, _currentPos.y + 1), _currentRect,  _currentSolution, _currentCost, level + 1, numBlanks);
-
-        // OPTIONS 3 & 4 - CLOSE THE CURRENT RECTANGLE (IF CORRECT) AND MOVE
-        if (CurrentRectIsOpen(_currentRect) &&
-            !CellIsOccupied(initialGrid, _currentPos))
-        {
-
-            if (PartialRectangleIsCorrect(initialGrid, _currentRect, _currentPos))
+            // MARKS GRID AND REDUCE BLANKS when a rectangle has been closed
+            if (numBlanksClosed > 0)
             {
+                MarkPartialRectangleOccupied(marksGrid, _currentRect, _currentPos, 1);
                 _currentSolution.push_back(rectangle(_currentRect, _currentPos));
-                bestSolution.push_back(rectangle(_currentRect, _currentPos));
-
-                MarkPartialRectangleOccupied(initialGrid, _currentRect, _currentPos);
-
                 _currentCost++;
-                bestCost++;
-                numBlanks -= CalculateRectangleArea(_currentRect, _currentPos);
-                _currentRect = coord2D(-1, -1);
+                numBlanks -= numBlanksClosed;
+            }
 
-                CalculateRectanglesRecursive(initialGrid, bestSolution, bestCost, coord2D(_currentPos.x + 1, _currentPos.y), _currentRect, _currentSolution, _currentCost, level + 1, numBlanks);
-                CalculateRectanglesRecursive(initialGrid, bestSolution, bestCost, coord2D(_currentPos.x, _currentPos.y + 1), _currentRect, _currentSolution, _currentCost, level + 1, numBlanks);
+            // IsFinalSolution
+            if (numBlanks == 0)
+            {
+                if (IsValidSolution(marksGrid, _newRect))
+                {
+                    // KeepSolution
+                    bestSolution = _currentSolution;
+                    bestCost = _currentCost;
+                }
             }
             else
             {
-                return 0;
+                // Recursive call
+                CalculateRectanglesRecursive(marksGrid, bestSolution, bestCost,
+                    _newPos, _newRect, _currentSolution, _currentCost,
+                    level + 1, numBlanks);
+
+                //
+                // TODO: MAYBE, THE LEVEL CAN BE INCREASED ONLY WHEN A RECTANGLE HAS BEEN CLOSED
+                //      TO BE ABLE TO KEEP THE SOLUTIONS IN AN ARRAY ???
+                //
             }
+
+            // UNMARKS GRID AND INCREASE BLANKS
+            //if (numBlanksClosed > 0)
+            //{
+            //    MarkPartialRectangleOccupied(marksGrid, _currentRect, _currentPos, 0);
+            //    _currentSolution -= ;
+            //    _currentCost--;
+            //    numBlanks += numBlanksClosed;
+            //}
         }
 
-        return _currentCost;
-    }
+    } //for
 }
 
 int CalculateRectangles(const vector<vector<int>> &initialGrid, vector<rectangle> &solution)
 {
     vector<vector<int>> copyGrid = initialGrid;
-    int numBlanks = CalculateNumBlanks(initialGrid);
+    int numBlanks = CalculateNumBlanks(copyGrid);
     int numRects = 0;
+    int tempCost = 0;
     CalculateRectanglesRecursive(copyGrid, solution, numRects,
-        coord2D(0,0), coord2D(-1,-1), vector<rectangle>(), 0,
+        coord2D(0,0), coord2D(-1,-1), vector<rectangle>(), tempCost,
         0, numBlanks);
     return numRects;
 }
@@ -278,8 +349,12 @@ int main()
         //{ 0,1,1,1,1,0 },
         //{ 1,0,1,0,0,0 },
 
-        { 0,0 },
-        { 0,1 }
+        //{ 0,0 },
+        //{ 0,1 }
+
+        { 0,1,0 },
+        { 0,0,0 },
+        { 1,1,0 }
     };
 
     std::cout << "INITIAL GRID:" << endl;
