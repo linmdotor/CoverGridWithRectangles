@@ -3,7 +3,7 @@
 
 using namespace std;
 
-#include "TessellatorStructures.h"
+#include "AuxStructures.h"
 
 class Tessellator {
 
