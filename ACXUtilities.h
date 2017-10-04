@@ -19,6 +19,9 @@ private:
     // This inventory will own and manage all AI-implant data.
     ACE_Inventory _inventory;
 
+    ACE_StreamedArea* FindFirstStreamedAreaInPoint(BGT_V4 point, ACE_IInventoryItem::ItemArray streamedAreasArray);
+    bool PointIsIntoStreamedArea(BGT_V4 point, ACE_StreamedArea * area);
+
 };
 
 

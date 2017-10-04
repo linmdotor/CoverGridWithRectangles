@@ -105,8 +105,9 @@ vector<vector<int>> ACXUtilities::ParseToArray()
 
     // Dadas dichas dimensiones vamos recorriendo de cellSize en cellSize, viendo
     // si cada punto se encuentra dentro de algún StreamedArea
-    // Las X crecen hacia la derecha y las Y crecen hacia arriba
-    double startPosX = -round(wordSize.x / 2.0) + round(cellSize / 2.0); // X comienza en el medio de donde estaría la primera casilla
+    // En AI.Implant las X crecen hacia la derecha y las Y crecen hacia arriba
+    // se comienza en el medio de donde estaría la primera casilla (superior izquierda)
+    double startPosX = -round(wordSize.x / 2.0) + round(cellSize / 2.0);
     double startPosY = round(wordSize.y / 2.0) - round(cellSize / 2.0);
 
     for (int i = 0; i < numCellsY; i++)
@@ -114,18 +115,14 @@ vector<vector<int>> ACXUtilities::ParseToArray()
         for (int j = 0; j < numCellsX; j++)
         {
             BGT_V4 currentPos = BGT_V4_STATIC_CONSTRUCT(startPosX + (j*cellSize), startPosY - (i*cellSize), 0, 0);
-            // Initialize to 0
-            resultGrid[i][j] = 0;
-            // For each StreamedArea
-            for (int strAreaIdx = 0; strAreaIdx < streamedAreasArray.GetSize(); ++strAreaIdx)
+
+            if (FindFirstStreamedAreaInPoint(currentPos, streamedAreasArray) != NULL)
             {
-                // It's within the bounds
-                ACE_StreamedArea *strArea = (ACE_StreamedArea *)streamedAreasArray[strAreaIdx];
-                if (currentPos.x > strArea->GetPoint1().x && currentPos.x < strArea->GetPoint2().x &&
-                    currentPos.y > strArea->GetPoint1().y && currentPos.y < strArea->GetPoint2().y)
-                {
-                    resultGrid[i][j] = 1;
-                }
+                resultGrid[i][j] = 1;
+            }
+            else
+            {
+                resultGrid[i][j] = 0;
             }
         }
     }
@@ -133,4 +130,26 @@ vector<vector<int>> ACXUtilities::ParseToArray()
     // TODO: Controlar el caso de que crea una fila de más (si cabe... :S) [jfmartinezd]
 
     return resultGrid;
+}
+
+ACE_StreamedArea* ACXUtilities::FindFirstStreamedAreaInPoint(BGT_V4 point, ACE_IInventoryItem::ItemArray streamedAreasArray)
+{
+    // For each StreamedArea
+    for (int strAreaIdx = 0; strAreaIdx < streamedAreasArray.GetSize(); ++strAreaIdx)
+    {
+        // It's within the bounds
+        ACE_StreamedArea *strArea = (ACE_StreamedArea *)streamedAreasArray[strAreaIdx];
+        if (PointIsIntoStreamedArea(point, strArea))
+        {
+            return strArea;
+        }
+    }
+
+    return NULL;
+}
+
+bool ACXUtilities::PointIsIntoStreamedArea(BGT_V4 point, ACE_StreamedArea * area)
+{
+    return (point.x > area->GetPoint1().x && point.x < area->GetPoint2().x &&
+        point.y > area->GetPoint1().y && point.y < area->GetPoint2().y);
 }
