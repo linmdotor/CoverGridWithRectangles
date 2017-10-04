@@ -60,7 +60,7 @@ int ACXUtilities::LoadACX(const std::string path, const std::string filename)
 
     // Make a backup of the original file, because it will be overwritten later
     ACP_Export exporter;
-    std::string export_path = path + filename + "_OLD.acx";
+    std::string export_path = path + filename + "_BACKUP.acx";
     exporter.Export(export_path.c_str(), &_inventory);
 
     return EXIT_SUCCESS;
@@ -78,27 +78,26 @@ vector<vector<int>> ACXUtilities::ParseToArray()
         //return EXIT_FAILURE;
         return vector<vector<int>>();
     }
-    ACE_Solver *mainSolver = (ACE_Solver *)solverItem;
+    _mainSolver = (ACE_Solver *)solverItem;
 
-    ACE_IInventoryItem::ItemArray streamedAreasArray;
-    mainSolver->GetChildren(&streamedAreasArray, BGT_OBJECT_TYPE(ACE_StreamedArea));
+    _mainSolver->GetChildren(&_streamedAreasArray, BGT_OBJECT_TYPE(ACE_StreamedArea));
 
-    ACE_IInventoryItem *strItem = mainSolver->GetFirstActiveChildOfType(BGT_OBJECT_TYPE(ACE_StreamedArea));
-    if (streamedAreasArray.GetSize() == 0)
+    ACE_IInventoryItem *strItem = _mainSolver->GetFirstActiveChildOfType(BGT_OBJECT_TYPE(ACE_StreamedArea));
+    if (_streamedAreasArray.GetSize() == 0)
     {
         BGT_LOG_ERROR(0, "No StreamedArea specified in imported ACX file");
         //return EXIT_FAILURE;
         return vector<vector<int>>();
     }
-    ACE_StreamedArea *firstStrArea = (ACE_StreamedArea *)streamedAreasArray[0];
+    ACE_StreamedArea *firstStrArea = (ACE_StreamedArea *)_streamedAreasArray[0];
 
     double cellSize = round(firstStrArea->GetPoint2().x - firstStrArea->GetPoint1().x);
 
     // Saca las dimensiones del mundo, para ver cuántas cuadrículas cabrían
-    BGT_V4 wordSize;
-    mainSolver->GetWorldSize(&wordSize);
-    int numCellsX = floor(wordSize.x / cellSize);
-    int numCellsY = floor(wordSize.y / cellSize);
+    BGT_V4 worldSize;
+    _mainSolver->GetWorldSize(&worldSize);
+    int numCellsX = floor(worldSize.x / cellSize);
+    int numCellsY = floor(worldSize.y / cellSize);
 
     //Crea una matriz para almacenar el resultado
     vector<vector<int>> resultGrid(numCellsY, vector<int>(numCellsX));
@@ -107,8 +106,8 @@ vector<vector<int>> ACXUtilities::ParseToArray()
     // si cada punto se encuentra dentro de algún StreamedArea
     // En AI.Implant las X crecen hacia la derecha y las Y crecen hacia arriba
     // se comienza en el medio de donde estaría la primera casilla (superior izquierda)
-    double startPosX = -round(wordSize.x / 2.0) + round(cellSize / 2.0);
-    double startPosY = round(wordSize.y / 2.0) - round(cellSize / 2.0);
+    double startPosX = -round(worldSize.x / 2.0) + round(cellSize / 2.0);
+    double startPosY = round(worldSize.y / 2.0) - round(cellSize / 2.0);
 
     for (int i = 0; i < numCellsY; i++)
     {
@@ -116,7 +115,7 @@ vector<vector<int>> ACXUtilities::ParseToArray()
         {
             BGT_V4 currentPos = BGT_V4_STATIC_CONSTRUCT(startPosX + (j*cellSize), startPosY - (i*cellSize), 0, 0);
 
-            if (FindFirstStreamedAreaInPoint(currentPos, streamedAreasArray) != NULL)
+            if (FindFirstStreamedAreaInPoint(currentPos, _streamedAreasArray) != NULL)
             {
                 resultGrid[i][j] = 1;
             }
@@ -153,3 +152,58 @@ bool ACXUtilities::PointIsIntoStreamedArea(BGT_V4 point, ACE_StreamedArea * area
     return (point.x > area->GetPoint1().x && point.x < area->GetPoint2().x &&
         point.y > area->GetPoint1().y && point.y < area->GetPoint2().y);
 }
+
+void ACXUtilities::CreateNewStreamedAreas(vector<rectangle> rectangles, const std::string path, const std::string filename)
+{
+    // Primero debemos encontrar el punto de inicio en el ACX, desde donde empezar a crear rectángulos,
+    // porque no es el -worldSize/2
+    // Para eso cogemos un StreamedArea al azar, y vamos restando cellSize hasta salir del "mundo"
+    ACE_StreamedArea *firstStrArea = (ACE_StreamedArea *)_streamedAreasArray[0];
+    double cellSize = round(firstStrArea->GetPoint2().x - firstStrArea->GetPoint1().x);
+
+    BGT_V4 worldSize;
+    _mainSolver->GetWorldSize(&worldSize);
+
+    float initX = round(firstStrArea->GetPoint1().x);
+    while ((initX - cellSize) >= -(worldSize.x/2.0f))
+    {
+        initX -= cellSize;
+    }
+
+    float initY = round(firstStrArea->GetPoint1().y);
+    while ((initY + cellSize) <= (worldSize.y / 2.0f))
+    {
+        initY += cellSize;
+    }
+
+    // Luego, vamos recorriendo el vector, y vamos multiplicando las coord2D por el cellSize
+    // Se deberían crear los rectángulos siguiendo la misma orientación que los actuales
+    for (auto rect = rectangles.begin(); rect != rectangles.end(); ++rect)
+    {
+        BGT_V4 point1 = BGT_V4_STATIC_CONSTRUCT(initX + (rect->corner1.x*cellSize), initY - (rect->corner1.y*cellSize), 0, 0);
+        BGT_V4 point2 = BGT_V4_STATIC_CONSTRUCT(initX + (rect->corner2.x*cellSize) + cellSize, initY - (rect->corner2.y*cellSize) - cellSize, 0, 0);
+
+        ACE_StreamedArea *newArea = (ACE_StreamedArea *)firstStrArea->Clone();
+
+        newArea->SetName("StreamedArea_NEW");
+        newArea->SetPoint1(point1);
+        newArea->SetPoint2(point2);
+        _mainSolver->AddChild(newArea);
+    }
+
+    //Almacena los cambios en el fichero de salida
+    ACP_Export exporter;
+    std::string export_path = path + filename + "_NEW.acx";
+    exporter.Export(export_path.c_str(), &_inventory);
+}
+
+
+//MÁS ALGORITMO
+
+// Va recorriendo todos los Streamed Areas
+
+// Por cada uno, va preguntando por el resto, si están "pegados" (coinciden en X o Y  ¡CUIDADO CON LAS DIAGONALES!)
+
+// Si están pegados, los conecta, desde la mitad de las 2 superficies que se unen
+
+// Mete esa conexión lógica a una lista, para saber cuáles se han conectado ya, y no repetir A->B B->A

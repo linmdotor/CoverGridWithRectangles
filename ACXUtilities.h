@@ -14,10 +14,13 @@ class ACXUtilities {
 public:
     int LoadACX(const std::string path, const std::string filename);
     vector<vector<int>> ParseToArray();
+    void CreateNewStreamedAreas(vector<rectangle> rectangles, const std::string path, const std::string filename);
 
 private:
     // This inventory will own and manage all AI-implant data.
+    ACE_Solver *_mainSolver;
     ACE_Inventory _inventory;
+    ACE_IInventoryItem::ItemArray _streamedAreasArray;
 
     ACE_StreamedArea* FindFirstStreamedAreaInPoint(BGT_V4 point, ACE_IInventoryItem::ItemArray streamedAreasArray);
     bool PointIsIntoStreamedArea(BGT_V4 point, ACE_StreamedArea * area);

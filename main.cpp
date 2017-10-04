@@ -132,16 +132,15 @@ int main()
     };
 
     Tessellator tess;
-    ACXUtilities parser;
+    ACXUtilities acxUtils;
     //vector<vector<int>> initialGrid = initialGrid_A;
-    const char *path = "./world/UK/";
+    const char *path = "./world/BELIZE/";
     const char *ACXFilename = "Master";
-    const char *outputFilename = "output.acx";
     //const char *filename = "world/BELIZE/Master.acx";
     std::cout << "Loading ACX..." << endl;
-    parser.LoadACX(path, ACXFilename);
+    acxUtils.LoadACX(path, ACXFilename);
     std::cout << "Parsing to Array..." << endl;
-    vector<vector<int>> initialGrid = parser.ParseToArray();
+    vector<vector<int>> initialGrid = acxUtils.ParseToArray();
 
     vector<rectangle> solution;
     std::cout << "Calculating solution..." << endl;
@@ -161,13 +160,7 @@ int main()
 
     std::cout << "Adding new rectangles to ACX file..." << endl;
 
+    acxUtils.CreateNewStreamedAreas(solution, path, ACXFilename);
 
-
-
-
-
-
-    std::cout << "Press any key to Exit..." << endl;
-    getch();
     return 0;
 }
