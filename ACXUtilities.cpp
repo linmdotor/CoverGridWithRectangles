@@ -35,7 +35,7 @@
 
 #define round(x) (x<0?std::ceil((x)-0.5):std::floor((x)+0.5))
 
-int ACXUtilities::LoadACX(const std::string path, const std::string filename)
+int ACXUtilities::LoadACX(const std::string path, const std::string filename, const std::string filenameBACKUP)
 {
     // Initialize AI-implant components
     ACE_Core::InitializeModule();
@@ -51,11 +51,11 @@ int ACXUtilities::LoadACX(const std::string path, const std::string filename)
     // world markup objects.
     ACP_Import importer;
     _inventory.GetStreamedAreaManager().SetMasterPath(path.c_str());
-    std::string complete_path = path + filename + ".acx";
+    std::string complete_path = path + filename;
     if (!importer.Import(complete_path.c_str(), &_inventory))
     {
         BGT_String message("Error importing ACX file \"");
-        message += (filename + ".acx").c_str();
+        message += (filename).c_str();
         message += "\".";
         BGT_LOG_ERROR(0, message);
         return EXIT_FAILURE;
@@ -63,7 +63,7 @@ int ACXUtilities::LoadACX(const std::string path, const std::string filename)
 
     // Make a backup of the original file, because it will be overwritten later
     ACP_Export exporter;
-    std::string export_path = path + filename + "_BACKUP.acx";
+    std::string export_path = path + filenameBACKUP;
     exporter.Export(export_path.c_str(), &_inventory);
 
     return EXIT_SUCCESS;
@@ -327,7 +327,7 @@ void ACXUtilities::ExportInventory(const std::string path, const std::string fil
 {
     //Almacena los cambios en el fichero de salida
     ACP_Export exporter;
-    std::string export_path = path + filename + "_NEW.acx";
+    std::string export_path = path + filename;
     exporter.Export(export_path.c_str(), &_inventory);
 }
 

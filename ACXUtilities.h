@@ -16,7 +16,7 @@ class ACE_WayPoint;
 class ACXUtilities {
 
 public:
-    int LoadACX(const std::string path, const std::string filename);
+    int LoadACX(const std::string path, const std::string filename, const std::string filenameBACKUP);
     vector<vector<int>> ParseToArray();
     void CreateNewStreamedAreas(vector<rectangle> rectangles);
     void CreateConnections();
