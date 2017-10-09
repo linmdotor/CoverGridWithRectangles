@@ -145,7 +145,7 @@ int main()
     vector<rectangle> solution;
     std::cout << "Calculating solution..." << endl;
     int numRects = tess.CalculateRectangles(initialGrid, solution);
-    std::cout << "RESULT: " << numRects << " rectangles." << endl;
+    std::cout << "RESULT: " << numRects << " NEW rectangles." << endl;
 
     std::cout << "Saving intermadiate file with rects in output.txt..." << endl;
     ofstream myfile;
@@ -158,9 +158,15 @@ int main()
         tess.PrintRectangleFile("output.txt", rect, initialGrid.size(), initialGrid[0].size());
     }
 
-    std::cout << "Adding new rectangles to ACX file..." << endl;
+    std::cout << "Adding new StreamedAreas..." << endl;
+    acxUtils.CreateNewStreamedAreas(solution);
 
-    acxUtils.CreateNewStreamedAreas(solution, path, ACXFilename);
+    std::cout << "Creating connections..." << endl;
+    acxUtils.CreateConnections();
 
+    std::cout << "Saving result into ACX file..." << endl;
+    acxUtils.ExportInventory(path, ACXFilename);
+
+    std::cout << endl;
     return 0;
 }
