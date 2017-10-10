@@ -28,7 +28,7 @@ int main(int argc, const char * argv[])
     const char *ACXFilenameBACKUP = argv[3];
     const char *ACXFilenameNEW = argv[4];
 
-    std::cout << "Loading ACX..." << endl;
+    std::cout << "Loading " << path << ACXFilename << "..." << endl;
     acxUtils.LoadACX(path, ACXFilename, ACXFilenameBACKUP);
 
     std::cout << "Parsing to Array..." << endl;

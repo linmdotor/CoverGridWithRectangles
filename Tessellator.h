@@ -33,6 +33,9 @@ public:
     void CalculateRectanglesRecursive(vector<vector<int>> &marksGrid, vector<rectangle> &bestSolution, int &bestCost,
         coord2D _currentPos, coord2D _currentRect, vector<rectangle> &_currentSolution, int &_currentCost,
         int level, int &numBlanks);
+    void CalculateRectanglesIterative(vector<vector<int>> &marksGrid, vector<rectangle> &bestSolution, int &bestCost,
+        coord2D _currentPos, coord2D _currentRect, int &numBlanks);
+
     int CalculateRectangles(const vector<vector<int>> &initialGrid, vector<rectangle> &solution);
 
 private:

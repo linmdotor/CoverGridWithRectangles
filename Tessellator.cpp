@@ -345,14 +345,73 @@ void Tessellator::CalculateRectanglesRecursive(vector<vector<int>> &marksGrid, v
     } //for
 }
 
+void Tessellator::CalculateRectanglesIterative(vector<vector<int>> &marksGrid, vector<rectangle> &solution, int &cost,
+    coord2D _currentPos, coord2D _currentRect, int &numBlanks)
+{
+    // The iterative algorithm will follow these rules:
+    // 1. Open a new Rectangle in the first blank position
+    // 2. Move rigth (as far as possible)
+    // 3. Move down (as far as possible)
+    // 4. Close the current rect and repeat from the upper left corner
+    // 5. Repeat until the number of Blanks is zero.
+
+    while (numBlanks > 0)
+    {
+        // FIND FIRST RECTANGLE
+        coord2D firstZeroPos = coord2D(-1, -1);
+        {
+            for (int i = 0; i < marksGrid[0].size() && !CurrentRectIsOpen(firstZeroPos); i++)
+            {
+                for (int j = 0; j < marksGrid.size() && !CurrentRectIsOpen(firstZeroPos); j++)
+                {
+                    if (!CellIsOccupied(marksGrid, coord2D(i, j)))
+                    {
+                        firstZeroPos = coord2D(i, j);
+                    }
+                }
+            }
+        }
+
+        // OPEN NEW RECTANGLE
+        coord2D currentRectPoint1 = firstZeroPos;
+        coord2D currentRectPoint2 = firstZeroPos;
+        coord2D nextPos;
+
+        // MOVE RIGHT
+        nextPos = coord2D(currentRectPoint2.x + 1, currentRectPoint2.y);
+        while (nextPos.x < marksGrid[0].size() && !CellIsOccupied(marksGrid, nextPos))
+        {
+            currentRectPoint2 = nextPos;
+            nextPos = coord2D(currentRectPoint2.x + 1, currentRectPoint2.y);
+        }
+
+        // MOVE DOWN
+        nextPos = coord2D(currentRectPoint2.x, currentRectPoint2.y + 1);
+        while (nextPos.y < marksGrid.size() && !CellIsOccupied(marksGrid, nextPos) && PartialRectangleIsCorrect(marksGrid, currentRectPoint1, nextPos))
+        {
+            currentRectPoint2 = nextPos;
+            nextPos = coord2D(currentRectPoint2.x, currentRectPoint2.y + 1);
+        }
+
+        // CLOSE CURRENT RECT
+        numBlanks -= CalculateRectangleArea(currentRectPoint1, currentRectPoint2);
+        MarkPartialRectangleOccupied(marksGrid, currentRectPoint1, currentRectPoint2, 1);
+        solution.push_back(rectangle(currentRectPoint1, currentRectPoint2));
+        cost++;
+    }
+
+}
+
 int Tessellator::CalculateRectangles(const vector<vector<int>> &initialGrid, vector<rectangle> &solution)
 {
     vector<vector<int>> copyGrid = initialGrid;
     int numBlanks = CalculateNumBlanks(copyGrid);
     int numRects = 0;
     int tempCost = 0;
-    CalculateRectanglesRecursive(copyGrid, solution, numRects,
-        coord2D(0, 0), coord2D(-1, -1), vector<rectangle>(), tempCost,
-        0, numBlanks);
+    //CalculateRectanglesRecursive(copyGrid, solution, numRects,
+    //    coord2D(0, 0), coord2D(-1, -1), vector<rectangle>(), tempCost,
+    //    0, numBlanks);
+    CalculateRectanglesIterative(copyGrid, solution, numRects,
+        coord2D(0, 0), coord2D(-1, -1), numBlanks);
     return numRects;
 }

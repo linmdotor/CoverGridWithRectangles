@@ -61,7 +61,7 @@ int ACXUtilities::LoadACX(const std::string path, const std::string filename, co
         return EXIT_FAILURE;
     }
 
-    // Make a backup of the original file, because it will be overwritten later
+    // Make a backup of the original file, because it could be overwritten later
     ACP_Export exporter;
     std::string export_path = path + filenameBACKUP;
     exporter.Export(export_path.c_str(), &_inventory);
@@ -71,14 +71,13 @@ int ACXUtilities::LoadACX(const std::string path, const std::string filename, co
 
 vector<vector<int>> ACXUtilities::ParseToArray()
 {
-    // Busca el primer StreamedArea y saca de él sus dimensiones.
-    // Damos por hecho que la cuadrícula siempre tiene las mismas dimensiones, y son
-    // cuadrados (height == width), si no, el algoritmo no funciona.
+    // Find the first StreamedArea and it dimensions.
+    // In order to the algorithm works, the grid will always have the same dimensions,
+    // and will be formed by squares (height == width).
     ACE_IInventoryItem *solverItem = _inventory.GetRootItem()->GetFirstActiveChildOfType(BGT_OBJECT_TYPE(ACE_Solver));
     if (solverItem == NULL)
     {
         BGT_LOG_ERROR(0, "No mainSolver specified in imported ACX file");
-        //return EXIT_FAILURE;
         return vector<vector<int>>();
     }
     _mainSolver = (ACE_Solver *)solverItem;
@@ -89,25 +88,24 @@ vector<vector<int>> ACXUtilities::ParseToArray()
     if (_streamedAreasArray.GetSize() == 0)
     {
         BGT_LOG_ERROR(0, "No StreamedArea specified in imported ACX file");
-        //return EXIT_FAILURE;
         return vector<vector<int>>();
     }
     ACE_StreamedArea *firstStrArea = (ACE_StreamedArea *)_streamedAreasArray[0];
 
     _cellSize = round(firstStrArea->GetPoint2().x - firstStrArea->GetPoint1().x);
 
-    // Saca las dimensiones del mundo, para ver cuántas cuadrículas cabrían
+    // Calculate the num of cells from the worldSize and cellSize
+    // And the initialPosition (it isn't the limit of the world)
     BGT_V4 worldSize;
     _mainSolver->GetWorldSize(&worldSize);
     CalculateInitPosAndNumCells(worldSize, firstStrArea->GetPoint1(), _cellSize);
 
-    //Crea una matriz para almacenar el resultado
+    // Output grid
     vector<vector<int>> resultGrid(_numCellsY, vector<int>(_numCellsX));
 
-    // Dadas dichas dimensiones vamos recorriendo de cellSize en cellSize, viendo
-    // si cada punto se encuentra dentro de algún StreamedArea
-    // En AI.Implant las X crecen hacia la derecha y las Y crecen hacia arriba
-    // se comienza en el medio de donde estaría la primera casilla (superior izquierda)
+    // We are going through each cell (adding cellSize), and loooking if the position
+    // corresponds to any StreamedArea
+    // In AI.Implant the X axis increses to th right, and Y axis increases to upper.
     double startPosX = _initPos.x + (_cellSize / 2.0);
     double startPosY = _initPos.y - (_cellSize / 2.0);
 
@@ -128,30 +126,19 @@ vector<vector<int>> ACXUtilities::ParseToArray()
         }
     }
 
-    // TODO: Controlar el caso de que crea una fila de más (si cabe... :S) [jfmartinezd]
-
     return resultGrid;
 }
 
 void ACXUtilities::CreateNewStreamedAreas(vector<rectangle> rectangles)
 {
-    // Primero debemos encontrar el punto de inicio en el ACX, desde donde empezar a crear rectángulos,
-    // porque no es el -worldSize/2
-    // Para eso cogemos un StreamedArea al azar, y vamos restando cellSize hasta salir del "mundo"
-    ACE_StreamedArea *firstStrArea = (ACE_StreamedArea *)_streamedAreasArray[0];
-
-    BGT_V4 worldSize;
-    _mainSolver->GetWorldSize(&worldSize);
-
-    // Luego, vamos recorriendo el vector, y vamos multiplicando las coord2D por el cellSize
-    // Se deberían crear los rectángulos siguiendo la misma orientación que los actuales
+    // Go through the grid and multiplies the coord2D for cellSize to set the new rectangles.
     for (auto rect = rectangles.begin(); rect != rectangles.end(); ++rect)
     {
         BGT_V4 point1 = BGT_V4_STATIC_CONSTRUCT(_initPos.x + (rect->corner1.x*_cellSize), _initPos.y - (rect->corner1.y*_cellSize), 0, 0);
         BGT_V4 point2 = BGT_V4_STATIC_CONSTRUCT(_initPos.x + (rect->corner2.x*_cellSize) + _cellSize, _initPos.y - (rect->corner2.y*_cellSize) - _cellSize, 0, 0);
 
-        // TODO: cambiar los streamSource, streamTrigger, path y parámetros del StreamArea, para que no se cargue nada adicional
-        ACE_StreamedArea *newArea = (ACE_StreamedArea *)firstStrArea->Clone();
+        // TODO: cambiar los streamSource, streamTrigger, path y parámetros del StreamArea, para que no se cargue nada adicional {jfmartinezd]
+        ACE_StreamedArea *newArea = (ACE_StreamedArea *)_streamedAreasArray[0]->Clone();
 
         newArea->SetName("StreamedArea_NEW");
         newArea->SetPoint1(point1);
@@ -163,9 +150,28 @@ void ACXUtilities::CreateNewStreamedAreas(vector<rectangle> rectangles)
 }
 
 
+////// TODO: Otra forma bastante más eficiente sería ir recorriendo todos los Streamed Areas
+////// Y por cada uno, ir preguntando si el resto están "pegados" (viendo las coordenadas (x,y) de p1 y p2
+////// La lógica de "AreaIsAdjacentTo" sería algo así como comprobar si alguna coordenada de p1
+////// es igual a alguna de p2, y si es así podría ser que estuvieran pegados, siempre que las otras
+////// coordenadas cumplieran alguna condición.
+////// Se podría implementar, pero de momento se descarta la idea por haber encontrado otra solución factible. 
+////// Sería algo así:
+
+//////for (int i = 0; i < _streamedAreasArray.GetSize(); ++i)
+//////{
+//////    for (int j = i + 1; j < _streamedAreasArray.GetSize(); ++j)
+//////    {
+//////        if (AreaIsAdjacentTo((ACE_StreamedArea *)_streamedAreasArray[i], (ACE_StreamedArea *)_streamedAreasArray[j]))
+//////        {
+//////            adjacencyLists[i].push_back(j);
+//////            adjacencyLists[j].push_back(i);
+//////        }
+//////    }
+//////}
 void ACXUtilities::CreateConnections()
 {
-    //Elimina todas las conexiones y waypoints existentes (por simplificar el algoritmo)
+    // remove all the existant connections and waypoints (to simplify)
     ACE_IInventoryItem::ItemArray wayPoints;
     _mainSolver->GetDescendants(&wayPoints, BGT_OBJECT_TYPE(ACE_WayPoint));
     for (int i = 0; i < wayPoints.GetSize(); ++i)
@@ -175,61 +181,29 @@ void ACXUtilities::CreateConnections()
 
     ACE_IInventoryItem::ItemArray metaconnections;
     _mainSolver->GetDescendants(&metaconnections, BGT_OBJECT_TYPE(ACE_MetaConnection));
-    //ACE_MetaConnectionNetwork *metaConnectionNet = (ACE_MetaConnectionNetwork *)_mainSolver->GetFirstActiveChildOfType(BGT_OBJECT_TYPE(ACE_MetaConnectionNetwork));
 
     for (int i = 0; i < metaconnections.GetSize(); ++i)
     {
-        //metaConnectionNet->RemoveChild(metaconnections[i]);
         _inventory.RemoveItem(metaconnections[i]->GetId());
     }
 
-    // Lista de adyacencia (grafo) con los StreamedAreas conectados.
-    // Si 1 y 2 están conectados, el 2 estará en la lista del 1, y el 1 en la lista del 2
+    // Adjacency List (graph) with all StreamedAreas connected.
+    // If 1 & 2 are connected, "2" will be in the 1's list, BUT "1" WILL NOT BE IN 2's list
     vector<vector<int>> adjacencyLists;
     for (int i = 0; i < _streamedAreasArray.GetSize(); ++i)
     {
         adjacencyLists.push_back(vector<int>());
     }
 
-    ////// TODO: Otra forma bastante más eficiente sería ir recorriendo todos los Streamed Areas
-    ////// Y por cada uno, ir preguntando si el resto están "pegados" (viendo las coordenadas (x,y) de p1 y p2
-    ////// La lógica de "AreaIsAdjacentTo" sería algo así como comprobar si alguna coordenada de p1
-    ////// es igual a alguna de p2, y si es así podría ser que estuvieran pegados, siempre que las otras
-    ////// coordenadas cumplieran alguna condición.
-    ////// Se podría implementar, pero de momento se descarta la idea por haber encontrado otra solución factible. 
-    ////// Sería algo así:
-
-    //////for (int i = 0; i < _streamedAreasArray.GetSize(); ++i)
-    //////{
-    //////    for (int j = i + 1; j < _streamedAreasArray.GetSize(); ++j)
-    //////    {
-    //////        if (AreaIsAdjacentTo((ACE_StreamedArea *)_streamedAreasArray[i], (ACE_StreamedArea *)_streamedAreasArray[j]))
-    //////        {
-    //////            adjacencyLists[i].push_back(j);
-    //////            adjacencyLists[j].push_back(i);
-    //////        }
-    //////    }
-    //////}
-
     //
-    // La lógica que vamos a utilizar para ver si están conectados es ir recorriendo
-    // de casilla lógica en casilla, comprobando si hemos cambiado de área a cada paso.
-    // Si cambiamos de área es que hay un link entre la anterior y la actual.
-    // Debemos repetirlo en horizontal y vertical para encontrar todas las conexiones.
-    // Sólo conectamos A->B (no B->A) para que luego no se repitan al hacer las MetaConnection
-    //
-    // En AI.Implant las X crecen hacia la derecha y las Y crecen hacia arriba
-    // Comenzaremos en el medio de donde estaría la primera casilla (superior izquierda)
+    // The algorithm will go through all the logic cells, and check if the current position
+    // has changed from one to other StreamedArea. Then, there is a link between the current and
+    // the previous areas.
+    // We must repeat this logic in horizontal and vertical to find all the connections.
+    // We start in the upper-left corner.
     //
 
-    // Saca las dimensiones del mundo, para ver cuántas cuadrículas cabrían
-    BGT_V4 worldSize;
-    _mainSolver->GetWorldSize(&worldSize);
-
-    // Crea una matriz para almacenar el resultado
-    vector<vector<int>> resultGrid(_numCellsY, vector<int>(_numCellsX));
-
-    // Dadas dichas dimensiones
+    // Starting point (init pos + little offset)
     double startPosX = _initPos.x + (_cellSize / 2.0);
     double startPosY = _initPos.y - (_cellSize / 2.0);
 
@@ -238,7 +212,7 @@ void ACXUtilities::CreateConnections()
 
     int totalLinks = 0;
 
-    // RECORREMOS Y VAMOS BUSCANDO ENLACES EN HORIZONTAL
+    // FIND HORIZONTAL CONNECTIONS
     for (int i = 0; i < _numCellsY; ++i)
     {
         previousArea = NULL;
@@ -248,12 +222,11 @@ void ACXUtilities::CreateConnections()
         {
             BGT_V4 currentPos = BGT_V4_STATIC_CONSTRUCT(startPosX + (j*_cellSize), startPosY - (i*_cellSize), 0, 0);
 
-            // Saca el ID del rect actual
             currentArea = FindFirstStreamedAreaInPoint(currentPos, _streamedAreasArray);
 
             if (previousArea != NULL && currentArea == NULL)
             {
-                std::cout << "ESTO NO DEBERIA PASAR; PORQUE TODO ESPACIO DEBE TENER UN STREAMEDAREA." << endl;
+                std::cout << "ERROR: ALL POSITIONS MUST HAVE A STREAMEDAREA." << endl;
                 previousArea = NULL;
             }
             else if (previousArea != NULL && currentArea->GetId() != previousArea->GetId())
@@ -273,7 +246,7 @@ void ACXUtilities::CreateConnections()
         }
     }
 
-    //RECORREMOS Y VAMOS BUSCANDO ENLACES EN VERTICAL
+    // FIND VERTICAL CONNECTIONS
     for (int j = 0; j < _numCellsX; ++j)
     {
         previousArea = NULL;
@@ -283,12 +256,11 @@ void ACXUtilities::CreateConnections()
         {
             BGT_V4 currentPos = BGT_V4_STATIC_CONSTRUCT(startPosX + (j*_cellSize), startPosY - (i*_cellSize), 0, 0);
 
-            // Saca el ID del rect actual
             currentArea = FindFirstStreamedAreaInPoint(currentPos, _streamedAreasArray);
 
             if (previousArea != NULL && currentArea == NULL)
             {
-                std::cout << "ESTO NO DEBERIA PASAR; PORQUE TODO ESPACIO DEBE TENER UN STREAMEDAREA." << endl;
+                std::cout << "ERROR: ALL POSITIONS MUST HAVE A STREAMEDAREA." << endl;
                 previousArea = NULL;
             }
             else if (previousArea != NULL && currentArea->GetId() != previousArea->GetId())
@@ -308,8 +280,7 @@ void ACXUtilities::CreateConnections()
         }
     }
 
-    // Ya tenemos la lista de enlaces. Ahora hay que conectarlos.
-
+    // CONNECT ALL THE FOUND CONNECTIONS.
     for (int vector1Idx=0; vector1Idx < adjacencyLists.size(); ++vector1Idx)
     {
         ACE_StreamedArea *area1 = (ACE_StreamedArea *)_streamedAreasArray[vector1Idx];
@@ -325,7 +296,7 @@ void ACXUtilities::CreateConnections()
 
 void ACXUtilities::ExportInventory(const std::string path, const std::string filename)
 {
-    //Almacena los cambios en el fichero de salida
+    //Export the current Inventory to an ACX output file
     ACP_Export exporter;
     std::string export_path = path + filename;
     exporter.Export(export_path.c_str(), &_inventory);
@@ -350,8 +321,8 @@ ACE_StreamedArea* ACXUtilities::FindFirstStreamedAreaInPoint(BGT_V4 point, ACE_I
 
 bool ACXUtilities::PointIsIntoStreamedArea(BGT_V4 point, ACE_StreamedArea * area)
 {
-    // Hay 4 posibilidades de que el punto esté en el área marcada por los puntos 1 y 2.
-    // "1" es el punto 1 área, "2" es el punto 2 del área, y "X" es el punto consultado
+    // There is 4 possibilities that the point will be INTO the area.
+    // "1" is the point1 of the area, "2" is the point2 of the area, and the "X" is the point
     //
     //    OPT1           OPT2           OPT3           OPT4
     // 1---------|    ----------2    2---------|    ----------1
@@ -360,7 +331,7 @@ bool ACXUtilities::PointIsIntoStreamedArea(BGT_V4 point, ACE_StreamedArea * area
     // |         |    |         |    |         |    |         |
     // ----------2    1----------    ----------1    2----------
     //
-    // Por ello debemos comprobar las 4 posibilidades:
+    // We must check the 4 possibilities:
 
     bool opt1 = point.x >= area->GetPoint1().x &&
                 point.x <= area->GetPoint2().x &&
@@ -382,7 +353,7 @@ bool ACXUtilities::PointIsIntoStreamedArea(BGT_V4 point, ACE_StreamedArea * area
                 point.y >= area->GetPoint1().y &&
                 point.y <= area->GetPoint2().y;
 
-    // Devolvemos TRUE si se cumple cualquiera de las 4
+    // returns TRUE if any of the options
     return opt1 || opt2 || opt3 || opt4;
 }
 
@@ -404,26 +375,23 @@ int WayPointCounter = 0;
 
 void ACXUtilities::Connect2StreamedAreas(ACE_StreamedArea * area1, ACE_StreamedArea * area2)
 {
-    // Se conectan desde la mitad de las 2 superficies coincidentes.
-    // Se deben crear 2 Waypoints (uno dentro de cada area), añadirlos al MainMetaConnection,
-    // y crear la MetaConnection.
+    // The areas are connected in the middle of the 2 coincident areas.
+    // We will create 2 Waypoints (1 in each area), add it to the MainMetaConnection,
+    // and create the MetaConnection.
 
     BGT_V4 a1_p1 = BGT_V4_STATIC_CONSTRUCT(round(area1->GetPoint1().x), round(area1->GetPoint1().y), 0, 0);
     BGT_V4 a1_p2 = BGT_V4_STATIC_CONSTRUCT(round(area1->GetPoint2().x), round(area1->GetPoint2().y), 0, 0);
     BGT_V4 a2_p1 = BGT_V4_STATIC_CONSTRUCT(round(area2->GetPoint1().x), round(area2->GetPoint1().y), 0, 0);
     BGT_V4 a2_p2 = BGT_V4_STATIC_CONSTRUCT(round(area2->GetPoint2().x), round(area2->GetPoint2().y), 0, 0);
 
-    // TODO: Checkear que al menos tienen un lado en común
+    // TODO: Checkear que al menos tienen un lado en común [jfmartinezd]
 
-    // Calcula el segmento intermedio de conexion (points of intersection from 2 rectangles)
+    // Calculate the segment of intersection from the 2 rectangles
     // - https://stackoverflow.com/questions/19753134/get-the-points-of-intersection-from-2-rectangles
-    // Hay mútiples formas de hacerlo.
-    // Como la forma de max & min nos exige que los rectángulos estén normalizados (p1.x < p2.x && p1.y < p2.y)
-    // y en nuestro caso no podemos asegurarlo (porque los rectángulos no los definimos nosotros),
-    // vamos a optar por hacerlo ordenando las 4 coordX y cogiendo las 2 intermedias, y
-    // ordenando las 4 coordY, y cogiendo las 2 intermedias.
-    // de esta forma, tenemos un algoritmo genérico, que funciona independientemente de las posición
-    // relativa de los 2 rectángulos.
+    // There are several ways to do it.
+    // The max&min way forces us to normalize the rectangles (p1.x < p2.x && p1.y < p2.y),
+    // but we can't we cannot guarantee it.
+    // Instead, we will sort the 4 Xcoord and Ycoord, and will take the 2 of te middle.
 
     int xs[4] = { a1_p1.x, a1_p2.x, a2_p1.x, a2_p2.x };
     int ys[4] = { a1_p1.y, a1_p2.y, a2_p1.y, a2_p2.y };
@@ -433,27 +401,26 @@ void ACXUtilities::Connect2StreamedAreas(ACE_StreamedArea * area1, ACE_StreamedA
     BGT_V4 segment_p1 = BGT_V4_STATIC_CONSTRUCT(xs[1], ys[1], 0, 0);
     BGT_V4 segment_p2 = BGT_V4_STATIC_CONSTRUCT(xs[2], ys[2], 0, 0);
 
-    // Calcula el punto medio (que es el punto medio de ambas coordenadas).
+    // Calculate the middlePoint (the center of both coordinates).
     BGT_V4 middlePoint = BGT_V4_STATIC_CONSTRUCT((segment_p1.x + segment_p2.x)/2.0f, (segment_p1.y + segment_p2.y)/2.0f, 0, 0);
 
     ACE_WayPoint *wPoint1;
     ACE_WayPoint *wPoint2;
 
-    // Crea los puntos, y desplaza un poco el middlePoint en función de la orientación
-    if (segment_p1.x == segment_p2.x) // segmento en vertical
+    // Create the points, and move the middlePoint depending on the orientation
+    if (segment_p1.x == segment_p2.x) // vertical segment
     {
         wPoint1 = CreateWayPoint(middlePoint.x - 500.0f, middlePoint.y, WayPointCounter++, 500);
         wPoint2 = CreateWayPoint(middlePoint.x + 500.0f, middlePoint.y, WayPointCounter++, 500);
     }
-    else if (segment_p1.y == segment_p2.y) // segmento en horizontal
+    else if (segment_p1.y == segment_p2.y) // horizontal segment
     {
         wPoint1 = CreateWayPoint(middlePoint.x, middlePoint.y - 500.0f, WayPointCounter++, 500);
         wPoint2 = CreateWayPoint(middlePoint.x, middlePoint.y + 500.0f, WayPointCounter++, 500);
     }
     else
     {
-        std::cout << "ALGO RARO HA OCURRIDO, POR LO MENOS DEBERIAN TENER X o Y EN COMUN..." << endl;
-        std::cout << "REVISA EL CODIGO PORQUE EL RESULTADO NO SERA VALIDO.." << endl;
+        std::cout << "ERROR: X or Y MUST BE THE SAME..." << endl;
     }
 
     ACE_MetaConnectionNetwork *metaConnectionNet = (ACE_MetaConnectionNetwork *)_mainSolver->GetFirstActiveChildOfType(BGT_OBJECT_TYPE(ACE_MetaConnectionNetwork));
@@ -486,10 +453,9 @@ ACE_WayPoint* ACXUtilities::CreateWayPoint(float posX, float posY, int ID, float
 
 void ACXUtilities::CalculateInitPosAndNumCells(BGT_V4 worldSize, BGT_V4 rectanglePosition, double cellSize)
 {
-    // No se puede hacer directamente floor(worldSize.x / cellSize); y floor(worldSize.y / cellSize);
-    // porque las casillas están desplazadas, y pudiera ser que en los márgenes cupiera otra celda
-    // y que en realidad fuera imposible (porque el espacio está dividido arriba y abajo o dcha y izda).
-    // Por es otenemos que calcular los puntos inicial y final reales (ya desplazados)
+    // We can't do floor(worldSize.x / cellSize); and floor(worldSize.y / cellSize);
+    // because the cells have an offset.
+    // We have to calculate the real init and end points (with the offset)
     float minX = round(rectanglePosition.x);
     while ((minX - cellSize) >= -(worldSize.x / 2.0f))
     {
