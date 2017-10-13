@@ -42,8 +42,14 @@ int main(int argc, const char * argv[])
     std::cout << "Adding new StreamedAreas..." << endl;
     acxUtils.CreateNewStreamedAreas(solution);
 
+    std::cout << "Generating tessellation of MeshBarriers navMeshes..." << endl;
+    acxUtils.GenerateTessellatedMeshBarriersAndNavMeshes();
+
     std::cout << "Creating connections..." << endl;
     acxUtils.CreateConnections();
+
+    //std::cout << "Creating pathfinding character..." << endl;
+    //acxUtils.CreatePathFindingCharacter();
 
     std::cout << "Saving result into ACX file..." << endl;
     acxUtils.ExportInventory(path, ACXFilenameNEW);

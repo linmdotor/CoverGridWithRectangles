@@ -2,9 +2,9 @@
 
 #include <math.h>
 
-///////////////////////
+////////////////////////////////////////////////////////////////////////////////
 // AI-Implant INCLUDES
-///////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 #include <stdlib.h>
 
@@ -19,21 +19,18 @@
 #include <ACE_World/ACE_WayPoint.h>
 #include <ACE_World/ACE_MetaConnection.h>
 #include <ACE_World/ACE_MetaConnectionNetwork.h>
+#include <ACE_Behaviour/ACE_BehaviourSeekTo.h>
+#include <ACE_World/ACE_MeshBarrier.h>
+#include <BGT_Geometry/BGT_Mesh.h>
+#include <ACE_World/ACE_NavMesh.h>
 
 // For reading ACX files
 #include <ACP_Import/ACP_Import.h>
 #include <ACP_Import/ACP_Export.h>
 
-// Set this to 0 to disable the debug server
-#define IMPLEMENT_DEBUG_SERVER 0
-
-// For the debug server
-#if IMPLEMENT_DEBUG_SERVER
-#include <ACP_Import/ACP_DebugServer.h>
-#endif
-
-
+// Auxiliar macro to round in previous versions of C++11
 #define round(x) (x<0?std::ceil((x)-0.5):std::floor((x)+0.5))
+
 
 int ACXUtilities::LoadACX(const std::string path, const std::string filename, const std::string filenameBACKUP)
 {
@@ -105,7 +102,7 @@ vector<vector<int>> ACXUtilities::ParseToArray()
 
     // We are going through each cell (adding cellSize), and loooking if the position
     // corresponds to any StreamedArea
-    // In AI.Implant the X axis increses to th right, and Y axis increases to upper.
+    // In AI.Implant the axis origin is in the lower left corner.
     double startPosX = _initPos.x + (_cellSize / 2.0);
     double startPosY = _initPos.y - (_cellSize / 2.0);
 
@@ -137,38 +134,41 @@ void ACXUtilities::CreateNewStreamedAreas(vector<rectangle> rectangles)
         BGT_V4 point1 = BGT_V4_STATIC_CONSTRUCT(_initPos.x + (rect->corner1.x*_cellSize), _initPos.y - (rect->corner1.y*_cellSize), 0, 0);
         BGT_V4 point2 = BGT_V4_STATIC_CONSTRUCT(_initPos.x + (rect->corner2.x*_cellSize) + _cellSize, _initPos.y - (rect->corner2.y*_cellSize) - _cellSize, 0, 0);
 
-        // TODO: cambiar los streamSource, streamTrigger, path y parámetros del StreamArea, para que no se cargue nada adicional {jfmartinezd]
-        ACE_StreamedArea *newArea = (ACE_StreamedArea *)_streamedAreasArray[0]->Clone();
+        ACE_StreamedArea *newArea = ACE_StreamedArea::CreateObject();
 
         newArea->SetName("StreamedArea_NEW");
         newArea->SetPoint1(point1);
         newArea->SetPoint2(point2);
-        // Adds the new StreamArea to the inventory and the array
+        newArea->SetStreamTrigger(ACE_StreamedArea::StreamTrigger::triggerDISTANCE);
+        newArea->SetStreamSource(ACE_StreamedArea::sourceOTHER);
+        newArea->SetTriggerDistance(((ACE_StreamedArea *)_streamedAreasArray[0])->GetTriggerDistance());
+        newArea->SetDecayTime(((ACE_StreamedArea *)_streamedAreasArray[0])->GetDecayTime());
+
         _mainSolver->AddChild(newArea);
         _streamedAreasArray.Append(newArea);
     }
 }
 
 
-////// TODO: Otra forma bastante más eficiente sería ir recorriendo todos los Streamed Areas
-////// Y por cada uno, ir preguntando si el resto están "pegados" (viendo las coordenadas (x,y) de p1 y p2
-////// La lógica de "AreaIsAdjacentTo" sería algo así como comprobar si alguna coordenada de p1
-////// es igual a alguna de p2, y si es así podría ser que estuvieran pegados, siempre que las otras
-////// coordenadas cumplieran alguna condición.
-////// Se podría implementar, pero de momento se descarta la idea por haber encontrado otra solución factible. 
-////// Sería algo así:
+//// TODO: Otra forma bastante más eficiente sería ir recorriendo todos los Streamed Areas
+//// Y por cada uno, ir preguntando si el resto están "pegados" (viendo las coordenadas (x,y) de p1 y p2
+//// La lógica de "AreaIsAdjacentTo" sería algo así como comprobar si alguna coordenada de p1
+//// es igual a alguna de p2, y si es así podría ser que estuvieran pegados, siempre que las otras
+//// coordenadas cumplieran alguna condición.
+//// Se podría implementar, pero de momento se descarta la idea por haber encontrado otra solución factible. [jfmartinezd]
+//// Sería algo así:
 
-//////for (int i = 0; i < _streamedAreasArray.GetSize(); ++i)
-//////{
-//////    for (int j = i + 1; j < _streamedAreasArray.GetSize(); ++j)
-//////    {
-//////        if (AreaIsAdjacentTo((ACE_StreamedArea *)_streamedAreasArray[i], (ACE_StreamedArea *)_streamedAreasArray[j]))
-//////        {
-//////            adjacencyLists[i].push_back(j);
-//////            adjacencyLists[j].push_back(i);
-//////        }
-//////    }
-//////}
+////for (int i = 0; i < _streamedAreasArray.GetSize(); ++i)
+////{
+////    for (int j = i + 1; j < _streamedAreasArray.GetSize(); ++j)
+////    {
+////        if (AreaIsAdjacentTo((ACE_StreamedArea *)_streamedAreasArray[i], (ACE_StreamedArea *)_streamedAreasArray[j]))
+////        {
+////            adjacencyLists[i].push_back(j);
+////            adjacencyLists[j].push_back(i);
+////        }
+////    }
+////}
 void ACXUtilities::CreateConnections()
 {
     // remove all the existant connections and waypoints (to simplify)
@@ -226,7 +226,7 @@ void ACXUtilities::CreateConnections()
 
             if (previousArea != NULL && currentArea == NULL)
             {
-                std::cout << "ERROR: ALL POSITIONS MUST HAVE A STREAMEDAREA." << endl;
+                std::cout << "ERROR: ALL POSITIONS MUST CORRESPOND TO A STREAMEDAREA." << endl;
                 previousArea = NULL;
             }
             else if (previousArea != NULL && currentArea->GetId() != previousArea->GetId())
@@ -260,7 +260,7 @@ void ACXUtilities::CreateConnections()
 
             if (previousArea != NULL && currentArea == NULL)
             {
-                std::cout << "ERROR: ALL POSITIONS MUST HAVE A STREAMEDAREA." << endl;
+                std::cout << "ERROR: ALL POSITIONS MUST CORRESPOND TO A STREAMEDAREA." << endl;
                 previousArea = NULL;
             }
             else if (previousArea != NULL && currentArea->GetId() != previousArea->GetId())
@@ -290,6 +290,10 @@ void ACXUtilities::CreateConnections()
             Connect2StreamedAreas(area1, area2);
         }
     }
+
+    ACE_MetaConnectionNetwork *metaConnectionNet = (ACE_MetaConnectionNetwork *)_mainSolver->GetFirstActiveChildOfType(BGT_OBJECT_TYPE(ACE_MetaConnectionNetwork));
+    metaConnectionNet->GenerateEdges();
+    metaConnectionNet->CalculateWeight();
 
     std::cout << "TOTAL LINKS: " << totalLinks << endl;
 }
@@ -353,23 +357,23 @@ bool ACXUtilities::PointIsIntoStreamedArea(BGT_V4 point, ACE_StreamedArea * area
                 point.y >= area->GetPoint1().y &&
                 point.y <= area->GetPoint2().y;
 
-    // returns TRUE if any of the options
+    // returns TRUE when any of the options is TRUE
     return opt1 || opt2 || opt3 || opt4;
 }
 
-bool ACXUtilities::AreaIsAdjacentTo(ACE_StreamedArea * area1, ACE_StreamedArea * area2)
-{
-    // 1. SUPONEMOS a2 está ARRIBA de a1
-    //
-    // 2. SUPONEMOS a2 está DERECHA de a1
-    //
-    // 3. SUPONEMOS a2 está ABAJO de a1
-    //
-    // 4. SUPONEMOS a2 está IZDA de a1
-    //
-
-    return true;
-}
+//bool ACXUtilities::AreaIsAdjacentTo(ACE_StreamedArea * area1, ACE_StreamedArea * area2)
+//{
+//    // 1. SUPONEMOS a2 está ARRIBA de a1
+//    //
+//    // 2. SUPONEMOS a2 está DERECHA de a1
+//    //
+//    // 3. SUPONEMOS a2 está ABAJO de a1
+//    //
+//    // 4. SUPONEMOS a2 está IZDA de a1
+//    //
+//
+//    return true;
+//}
 
 int WayPointCounter = 0;
 
@@ -390,7 +394,7 @@ void ACXUtilities::Connect2StreamedAreas(ACE_StreamedArea * area1, ACE_StreamedA
     // - https://stackoverflow.com/questions/19753134/get-the-points-of-intersection-from-2-rectangles
     // There are several ways to do it.
     // The max&min way forces us to normalize the rectangles (p1.x < p2.x && p1.y < p2.y),
-    // but we can't we cannot guarantee it.
+    // but we can't guarantee it.
     // Instead, we will sort the 4 Xcoord and Ycoord, and will take the 2 of te middle.
 
     int xs[4] = { a1_p1.x, a1_p2.x, a2_p1.x, a2_p2.x };
@@ -407,16 +411,19 @@ void ACXUtilities::Connect2StreamedAreas(ACE_StreamedArea * area1, ACE_StreamedA
     ACE_WayPoint *wPoint1;
     ACE_WayPoint *wPoint2;
 
+    float offSet = 10.0f; // Admitted error for 2 points to be "in the same position"
+    float wayPointRadius = 500.0f;
+
     // Create the points, and move the middlePoint depending on the orientation
-    if (segment_p1.x == segment_p2.x) // vertical segment
+    if (abs(segment_p1.x - segment_p2.x) <= offSet) // vertical segment
     {
-        wPoint1 = CreateWayPoint(middlePoint.x - 500.0f, middlePoint.y, WayPointCounter++, 500);
-        wPoint2 = CreateWayPoint(middlePoint.x + 500.0f, middlePoint.y, WayPointCounter++, 500);
+        wPoint1 = CreateWayPoint(middlePoint.x - wayPointRadius, middlePoint.y, WayPointCounter++, wayPointRadius);
+        wPoint2 = CreateWayPoint(middlePoint.x + wayPointRadius, middlePoint.y, WayPointCounter++, wayPointRadius);
     }
-    else if (segment_p1.y == segment_p2.y) // horizontal segment
+    else if (abs(segment_p1.y - segment_p2.y) <= offSet) // horizontal segment
     {
-        wPoint1 = CreateWayPoint(middlePoint.x, middlePoint.y - 500.0f, WayPointCounter++, 500);
-        wPoint2 = CreateWayPoint(middlePoint.x, middlePoint.y + 500.0f, WayPointCounter++, 500);
+        wPoint1 = CreateWayPoint(middlePoint.x, middlePoint.y - wayPointRadius, WayPointCounter++, wayPointRadius);
+        wPoint2 = CreateWayPoint(middlePoint.x, middlePoint.y + wayPointRadius, WayPointCounter++, wayPointRadius);
     }
     else
     {
@@ -454,8 +461,8 @@ ACE_WayPoint* ACXUtilities::CreateWayPoint(float posX, float posY, int ID, float
 void ACXUtilities::CalculateInitPosAndNumCells(BGT_V4 worldSize, BGT_V4 rectanglePosition, double cellSize)
 {
     // We can't do floor(worldSize.x / cellSize); and floor(worldSize.y / cellSize);
-    // because the cells have an offset.
-    // We have to calculate the real init and end points (with the offset)
+    // because the cells have an offset respect the world's origin.
+    // We have to calculate the real init and end points (offset included)
     float minX = round(rectanglePosition.x);
     while ((minX - cellSize) >= -(worldSize.x / 2.0f))
     {
@@ -482,4 +489,136 @@ void ACXUtilities::CalculateInitPosAndNumCells(BGT_V4 worldSize, BGT_V4 rectangl
 
     _numCellsX = floor((maxX - minX) / cellSize);
     _numCellsY = floor((maxY - minY) / cellSize);
+}
+
+// TODO: Este método de construcción de geometría es el más lento de todo el proceso
+// Como no va a ser un algoritmo que corra en tiempo real, no nos procupa el tiempo de ejecución.
+// Igualmente, ver si se puede optimizar un poco este proceso. [jfmartinezd]
+void ACXUtilities::GenerateTessellatedMeshBarriersAndNavMeshes()
+{
+    for (int i = 0; i < _streamedAreasArray.GetSize(); ++i)
+    {
+        ACE_StreamedArea * area = (ACE_StreamedArea *)_streamedAreasArray[i];
+
+        if (strcmp(area->GetName(), "StreamedArea_NEW") == 0) // Only with NEW areas
+        {
+            BGT_V4 point1 = area->GetPoint1();
+            BGT_V4 point2 = area->GetPoint2();
+
+            // MESH TO CREATE THE NEW GEOMETRY
+            BGT_Mesh *meshShape = BGT_Mesh::CreateObject();
+
+            int numTilesX = round(abs(point1.x - point2.x) / _cellSize);
+            int numTilesY = round(abs(point1.y - point2.y) / _cellSize);
+
+            // Declare an Array of Polys to store temporarily the poly's vertices
+            int PolyCount = (numTilesX * numTilesY);
+            int VertexCount = 4; // 4 is the number of vertex of each poly (squares in this case)
+            BGT_V4 *Polys = new BGT_V4[(PolyCount * VertexCount)];
+
+            // We define the tile's vertices of a square IN ANTICLOCKWISE ORDER
+            // VERY IMPORTANT TO DEFINE THE VERTEX GEOMETRY IN THIS ORDER!!!!!
+            //
+            // Ex.
+            // 1 --- 4
+            // |     |
+            // |     |
+            // 2 --- 3
+            // TODO: Puede ser más óptimo para los cálculos de AI.Implant tener la geometría en triángulos?
+            // Estudiar si hay alguna diferencia de eficiencia, y cambiar por 2 triángulos si fuera necesario [jfmartinezd]
+
+            for (int j = 0; j < numTilesY; ++j)
+            {
+                for (int i = 0; i < numTilesX; ++i)
+                {
+                    BGT_V4 polyVertex1 = BGT_V4_STATIC_CONSTRUCT(point1.x + (i*_cellSize), point1.y - (j*_cellSize), 0, 0);
+                    BGT_V4 polyVertex2 = BGT_V4_STATIC_CONSTRUCT(point1.x + (i*_cellSize), point1.y - (j*_cellSize) - _cellSize, 0, 0);
+                    BGT_V4 polyVertex3 = BGT_V4_STATIC_CONSTRUCT(point1.x + (i*_cellSize) + _cellSize, point1.y - (j*_cellSize) - _cellSize, 0, 0);
+                    BGT_V4 polyVertex4 = BGT_V4_STATIC_CONSTRUCT(point1.x + (i*_cellSize) + _cellSize, point1.y - (j*_cellSize), 0, 0);
+
+                    int polyIdx = (j*numTilesX * 4) + (i * 4);
+
+                    Polys[polyIdx + 0] = polyVertex1;
+                    Polys[polyIdx + 1] = polyVertex2;
+                    Polys[polyIdx + 2] = polyVertex3;
+                    Polys[polyIdx + 3] = polyVertex4;
+                }
+            }
+
+            // Make a buffer to hold the vertex indices of a single poly
+            int *vertIndices = new int[VertexCount];
+
+            // Go through and add all the polys
+            for (int i = 0; i < PolyCount; ++i)
+            {
+                // Go through and add all the vertices, if they aren’t there already
+                // Again we assume triangles here
+                for (int j = 0; j < VertexCount; ++j)
+                {
+                    BGT_V4 point = Polys[(i*VertexCount) + j];
+
+                    // Try to locate the vertex in the mesh
+                    int vertIndex = meshShape->FindVertex(point);
+                    // If it is not there, add it
+                    if (vertIndex == -1)
+                        vertIndex = meshShape->AddVertex(point);
+                    vertIndices[j] = vertIndex;
+                }
+                // Add the finished polygon to the mesh
+                meshShape->AddPolygon(&vertIndices[0], VertexCount);
+            }
+
+            // 1. GET THE EXISTENT MESHBARRIER -- OPTION 1
+            //ACE_IInventoryItem::Id barrierID = area->GetMeshBarrierId();
+            //if (barrierID == 0)
+            //{
+            //    // This makes sure the main MeshBarrier is created for the StreamedArea.
+            //    area->SetShape(NULL);
+            //    barrierID = area->GetMeshBarrierId();
+            //}
+
+            //ACE_IInventoryItem* barrierItem = area->GetInventory()->Find(barrierID);
+            //ACE_MeshBarrier *meshBarrier = (ACE_MeshBarrier*)barrierItem;
+            //meshBarrier->SetShape(meshShape);
+
+            //2. CREATE A NEW MESHBARRIER -- OPTION 2
+            ACE_MeshBarrier *meshBarrier = ACE_MeshBarrier::CreateObject();
+            meshBarrier->SetName("MeshBarrier_NEW");
+            meshBarrier->SetShape(meshShape);
+
+            ACE_NavMesh *navMesh = ACE_NavMesh::CreateObject();
+            navMesh->SetName("NavMesh_NEW");
+
+            area->AddChild(meshBarrier);
+            meshBarrier->AddChild(navMesh);
+        }
+    }
+}
+
+void ACXUtilities::CreatePathFindingCharacter()
+{
+    ACE_MetaConnectionNetwork *metaConnectionNet = (ACE_MetaConnectionNetwork *)_mainSolver->GetFirstActiveChildOfType(BGT_OBJECT_TYPE(ACE_MetaConnectionNetwork));
+
+    ACE_WayPoint *target = ACE_WayPoint::CreateObject();
+    target->SetName("Target");
+    target->SetShapeFat(100.0f);
+    target->SetPosition(BGT_V4_STATIC_CONSTRUCT(222200, -507000, 0, 0));
+    _mainSolver->AddChild(target);
+
+    ACE_Character *character = ACE_Character::CreateObject();
+    character->SetName("AC");
+    character->SetShapeFat(100.0f);
+    character->SetPosition(BGT_V4_STATIC_CONSTRUCT(228700, -473000, 0, 0));
+    character->SetMaxSpeed(1000.0f);
+    character->SetMaxAcceleration(500.0f);
+    character->SetNavMeshId(metaConnectionNet->GetId());
+    character->SetAvoidNavMeshEdges(false);
+    character->SetPathSmoothingLookahead(30);
+    character->SetPathfindingEconomy(0.0f);
+    character->SetPathRecalculationRate(100);
+    _mainSolver->AddChild(character);
+
+    ACE_BehaviourSeekTo* behaviourSeekTo = ACE_BehaviourSeekTo::CreateObject();
+    behaviourSeekTo->SetTarget(target->GetId());
+    character->AddChild(behaviourSeekTo);
 }

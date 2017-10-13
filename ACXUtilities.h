@@ -19,7 +19,9 @@ public:
     int LoadACX(const std::string path, const std::string filename, const std::string filenameBACKUP);
     vector<vector<int>> ParseToArray();
     void CreateNewStreamedAreas(vector<rectangle> rectangles);
+    void GenerateTessellatedMeshBarriersAndNavMeshes();
     void CreateConnections();
+    void CreatePathFindingCharacter();
     void ExportInventory(const std::string path, const std::string filename);
 
 private:
@@ -33,7 +35,7 @@ private:
 
     ACE_StreamedArea* FindFirstStreamedAreaInPoint(BGT_V4 point, ACE_IInventoryItem::ItemArray streamedAreasArray);
     bool PointIsIntoStreamedArea(BGT_V4 point, ACE_StreamedArea * area);
-    bool AreaIsAdjacentTo(ACE_StreamedArea * area1, ACE_StreamedArea * area2);
+    //bool AreaIsAdjacentTo(ACE_StreamedArea * area1, ACE_StreamedArea * area2);
     void Connect2StreamedAreas(ACE_StreamedArea * area1, ACE_StreamedArea * area2);
     ACE_WayPoint* CreateWayPoint(float posX, float posY, int ID, float radius);
     void CalculateInitPosAndNumCells(BGT_V4 worldSize, BGT_V4 rectanglePosition, double cellSize);
